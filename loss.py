@@ -42,7 +42,6 @@ def transformer_tts_v2_loss(
     for idx, l in enumerate(x_lengths):
         x[idx, l + 1 :] = -1
 
-    print(y.size())
     for idx, l in enumerate(y_lengths):
         y[idx, :, l + 1 :] = -1
         if ref_ids is not None:
