@@ -319,7 +319,7 @@ speech_code_vocab = [i for i in range(encodec.model.quantizer.bins)]  # 0 ~ 1023
 T_dec = model_config.sampling_rate
 y_list = []
 for i in range(n_samples):
-    y = 2 * torch.randn(1, model_config.sampling_rate * random.randint(1, 10)) - 1
+    y = 2 * torch.rand(1, model_config.sampling_rate * random.randint(1, 10)) - 1
     y_list.append(y)
 # y_list = y_list + y_list
 random.shuffle(y_list)
