@@ -233,6 +233,139 @@ y = model.inference(
 print(y.size())
 ```
 
+```python
+# transformer tts v2 inference
+
+import torch
+from transformers import GPT2Tokenizer
+
+from models import TransformerTTSv2
+from mel_processing import mel_spectrogram_torch
+from inference import HFTransformerTTSv2Config, HFTransformerTTSv2
+
+tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+
+config = HFTransformerTTSv2Config()
+config.n_linguistic_vocabs = tokenizer.vocab_size
+model = TransformerTTSv2(config)
+model = HFTransformerTTSv2(config=config, model=model)
+
+text = "hi? good to see you."
+tokens = tokenizer(text)["input_ids"]
+
+B = 1
+T_enc = len(tokens)
+T_dec = config.sampling_rate
+
+x = torch.LongTensor(tokens).unsqueeze(0)
+x_lengths = torch.LongTensor([T_enc])
+
+y_ref = 2 * torch.rand(B, T_dec) - 1
+y_ref = mel_spectrogram_torch(
+    y=y_ref.squeeze(1),
+    n_fft=config.n_fft,
+    n_mel_channels=config.n_mel_channels,
+    sampling_rate=config.sampling_rate,
+    hop_length=config.hop_length,
+    win_length=config.win_length,
+    fmin=config.fmin,
+    fmax=config.fmax,
+)
+
+y = model.inference(
+    x=x,
+    x_lengths=x_lengths,
+    g=y_ref,
+    top_p=0.85,
+    top_k=50,
+    do_sample=True,
+    num_beams=1,
+)
+print(y.size())
+```
+
+```python
+# speech codes byte-pair encoding tokenization
+# https://huggingface.co/learn/nlp-course/chapter6/5
+
+import os
+import json
+
+import torch
+from tqdm.auto import tqdm
+
+from configs.cross_entropy_hf import TransformerTTSv3Config
+from encodec_wrapper import EncodecWrapper
+from speech_bpe import generate_codes_vocab, tokenize, tokens_to_ids
+
+
+model_config = TransformerTTSv3Config()
+encodec = EncodecWrapper()
+
+n_samples = 1000
+win_length = 2
+hop_length = 2
+
+code_freqs = defaultdict(int)
+n_codes = encodec.model.quantizer.bins
+
+# basetts: wavlm codebook size 256, bpe vocab size 8192 -> 8192 / 256 = 32
+max_speech_code_vocab_size = n_codes * model_config.c_vocab  # 1024 * 32
+
+speech_code_vocab = [i for i in range(encodec.model.quantizer.bins)]  # 0 ~ 1023
+
+# generate raw waveform samples
+T_dec = model_config.sampling_rate
+y_list = []
+for i in range(n_samples):
+    y = 2 * torch.randn(1, model_config.sampling_rate * random.randint(1, 10)) - 1
+    y_list.append(y)
+# y_list = y_list + y_list
+random.shuffle(y_list)
+
+# generate codes from raw waveform samples
+codes_list = []
+for y in tqdm(y_list, total=len(y_list)):
+    with torch.no_grad():
+        # codes = encodec.encode(y, return_emb=False)
+        # codes = codes[:, : 1, :]
+        codes = torch.randint(0, n_codes, (1, 1, y.size(-1) // 320))
+    codes_list.append(codes.view(-1).tolist())
+
+vocab_path = "./vocab.json"
+if os.path.isfile(vocab_path):
+    with open(vocab_path, "r", encoding="utf8") as j:
+        data = json.loads(j.read())
+        speech_code_vocab, merges = data["speech_code_vocab"], eval(data["merges"])
+        win_length = data["win_length"]
+        hop_length = data["hop_length"]
+else:
+    print("generating vocabs")
+    speech_code_vocab, merges = generate_codes_vocab(
+        codes_list=codes_list,
+        speech_code_vocab=speech_code_vocab,
+        max_speech_code_vocab_size=max_speech_code_vocab_size,
+        win_length=win_length,
+        hop_length=hop_length,
+    )
+    data = {
+        "win_length": win_length,
+        "hop_length": hop_length,
+        "speech_code_vocab": speech_code_vocab,
+        "merges": str(merges),
+    }
+    with open(vocab_path, "w", encoding="utf8") as j:
+        json.dump(data, j, ensure_ascii=False, indent=4, sort_keys=False)
+
+print(len(speech_code_vocab))
+
+for codes in tqdm(codes_list, total=len(codes_list)):
+    tokens = tokenize(codes, merges, win_length=win_length, hop_length=hop_length)
+    ids = tokens_to_ids(tokens, speech_code_vocab)
+    print(len(codes), len(tokens), len(ids))
+```
+
+
 ## Reference
 1. [Transformer-TTS](https://arxiv.org/abs/1809.08895)
 2. [BaseTTS](https://arxiv.org/abs/2402.08093)
