@@ -30,7 +30,7 @@ tokenization strategy: sliding window
 """
 
 
-def sliding_window(sequence: List[int], win_length: int = 4, hop_length: int = 4):
+def sliding_window(sequence: List[int], win_length: int = 2, hop_length: int = 2):
     windows = []
     for i in range(0, len(sequence) - win_length + 1, hop_length):
         window = sequence[i : i + win_length]
