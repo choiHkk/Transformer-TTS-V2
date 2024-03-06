@@ -3,8 +3,6 @@
 
 *  Since the model structure was coded from scratch, there might be some deficiencies. Especially, the code for the transformer tts v2 huggingface inference part may have issues, as it was not written with a thorough understanding.
 
-* I implemented BPE (Byte-Pair Encoding) for the speechcode proposed in BaseTTS, but it may not be the correct method. In particular, the authors mentioned applying a scale factor of 2 to the gpt last hidden state right before the input to the vocoder, but it is not clear whether this method was applied in the BPE 2gram style or not. Furthermore, the vector quantizer trained with WavLM-base is not the same implementation.
-
 ## Code Snippets
 
 ```python
